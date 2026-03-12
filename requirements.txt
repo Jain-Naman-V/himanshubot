@@ -1,0 +1,9 @@
+streamlit
+langchain-google-genai
+SpeechRecognition
+edge-tts
+plotly
+fpdf
+python-dotenv
+pypdf
+streamlit-mic-recorder
