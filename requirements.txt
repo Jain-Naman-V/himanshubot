@@ -5,7 +5,7 @@ langchain-core
 SpeechRecognition
 edge-tts
 plotly
-fpdf
+fpdf2
 python-dotenv
 pypdf
 streamlit-mic-recorder
