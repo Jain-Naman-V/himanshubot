@@ -593,6 +593,7 @@ def create_rich_pdf_report(data, role, company):
     """Create PDF with full report data (enhanced structure)."""
     pdf = PDF()
     pdf.add_page()
+    pdf.set_auto_page_break(True, 20)
 
     # Normalize data for backward compatibility
     score = data.get("overall_score", data.get("score", 0))
@@ -633,7 +634,7 @@ def create_rich_pdf_report(data, role, company):
         pdf.set_font("helvetica", "", 10)
         for s in strengths[:5]:
             clean = str(s).encode("latin-1", "replace").decode("latin-1")
-            pdf.multi_cell(0, 5, f"- {clean}")
+            _safe_multi_cell(pdf, 0, 5, f"- {clean}")
         pdf.ln(3)
 
     # Weaknesses
@@ -644,7 +645,7 @@ def create_rich_pdf_report(data, role, company):
         pdf.set_font("helvetica", "", 10)
         for w in weaknesses[:5]:
             clean = str(w).encode("latin-1", "replace").decode("latin-1")
-            pdf.multi_cell(0, 5, f"- {clean}")
+            _safe_multi_cell(pdf, 0, 5, f"- {clean}")
         pdf.ln(3)
 
     # How to present better
@@ -658,7 +659,7 @@ def create_rich_pdf_report(data, role, company):
                 tip = h.get("tip", "")
                 do = h.get("do_instead", "")[:100]
                 clean = f"{tip}: {do}".encode("latin-1", "replace").decode("latin-1")
-                pdf.multi_cell(0, 5, clean)
+                _safe_multi_cell(pdf, 0, 5, clean)
         pdf.ln(3)
 
     # Intro review
@@ -669,7 +670,7 @@ def create_rich_pdf_report(data, role, company):
         pdf.set_font("helvetica", "", 9)
         si = intro.get("suggested_intro", "")[:500]
         clean = si.encode("latin-1", "replace").decode("latin-1")
-        pdf.multi_cell(0, 5, clean)
+        _safe_multi_cell(pdf, 0, 5, clean)
         pdf.ln(3)
 
     # Detailed analysis
@@ -681,13 +682,13 @@ def create_rich_pdf_report(data, role, company):
         pdf.set_font("helvetica", "", 9)
         for b in bullets[:8]:
             clean = str(b).encode("latin-1", "replace").decode("latin-1")
-            pdf.multi_cell(0, 5, f"- {clean}")
+            _safe_multi_cell(pdf, 0, 5, f"- {clean}")
     elif detail:
         pdf.set_font("helvetica", "B", 11)
         pdf.cell(0, 8, "Detailed Feedback", 0, new_x="LMARGIN", new_y="NEXT", align="L")
         pdf.set_font("helvetica", "", 9)
         clean = str(detail)[:800].encode("latin-1", "replace").decode("latin-1")
-        pdf.multi_cell(0, 5, clean)
+        _safe_multi_cell(pdf, 0, 5, clean)
 
     pdf.ln(5)
     # Next steps
@@ -698,7 +699,7 @@ def create_rich_pdf_report(data, role, company):
         pdf.set_font("helvetica", "", 9)
         for s in steps[:5]:
             clean = str(s).encode("latin-1", "replace").decode("latin-1")
-            pdf.multi_cell(0, 5, f"- {clean}")
+            _safe_multi_cell(pdf, 0, 5, f"- {clean}")
 
     filename = "CareerFlow_Report.pdf"
     pdf.output(filename)
@@ -707,6 +708,19 @@ def create_rich_pdf_report(data, role, company):
 
 def _clean_pdf_text(s, max_len=800):
     return str(s)[:max_len].encode("latin-1", "replace").decode("latin-1")
+
+
+def _safe_multi_cell(pdf, w, h, text):
+    """Safely write multi_cell, resetting X to left margin to avoid 'Not enough horizontal space' errors."""
+    pdf.set_x(pdf.l_margin)
+    try:
+        pdf.multi_cell(w, h, text)
+    except Exception:
+        # Fallback: truncate aggressively and retry
+        try:
+            pdf.multi_cell(w, h, text[:80])
+        except Exception:
+            pass  # Skip this text entirely rather than crash
 
 
 def _parse_cv_sections(cv_text):
@@ -773,7 +787,7 @@ def create_cv_pdf(cv_text):
             line = line.strip()
             if line:
                 pdf.set_x(10)
-                pdf.multi_cell(0, 5, line[:500])
+                _safe_multi_cell(pdf, 0, 5, line[:500])
         pdf.ln(4)
     pdf_dir = os.path.join(tempfile.gettempdir(), "CareerFlow")
     os.makedirs(pdf_dir, exist_ok=True)
@@ -786,6 +800,7 @@ def create_main_report_pdf(data, role, company):
     """PDF 1: Main report - scores, summary, strengths, weaknesses."""
     pdf = PDF()
     pdf.add_page()
+    pdf.set_auto_page_break(True, 20)
     score = data.get("overall_score", data.get("score", 0))
     dims = data.get("dimensions", {})
     tech = dims.get("technical", dims.get("knowledge", 0))
@@ -814,7 +829,7 @@ def create_main_report_pdf(data, role, company):
             pdf.cell(0, 8, label, 0, new_x="LMARGIN", new_y="NEXT", align="L")
             pdf.set_font("helvetica", "", 10)
             for x in items:
-                pdf.multi_cell(0, 5, f"- {_clean_pdf_text(x, 500)}")
+                _safe_multi_cell(pdf, 0, 5, f"- {_clean_pdf_text(x, 500)}")
             pdf.ln(3)
     pdf_dir = os.path.join(tempfile.gettempdir(), "CareerFlow")
     os.makedirs(pdf_dir, exist_ok=True)
@@ -827,6 +842,7 @@ def create_detailed_feedback_pdf(data, role, company):
     """PDF 2: Detailed feedback - answer reviews, how to present, intro, analysis."""
     pdf = PDF()
     pdf.add_page()
+    pdf.set_auto_page_break(True, 20)
     pdf.set_font("helvetica", "B", 16)
     pdf.set_text_color(10, 25, 60)
     pdf.cell(0, 10, "DETAILED FEEDBACK REPORT", 0, new_x="LMARGIN", new_y="NEXT", align="C")
@@ -840,8 +856,8 @@ def create_detailed_feedback_pdf(data, role, company):
             pdf.set_font("helvetica", "B", 10)
             pdf.cell(0, 6, ar.get("question_topic", "Question"), 0, new_x="LMARGIN", new_y="NEXT", align="L")
             pdf.set_font("helvetica", "", 9)
-            pdf.multi_cell(0, 5, f"You said: {_clean_pdf_text(ar.get('user_answer_summary', ''), 200)}")
-            pdf.multi_cell(0, 5, f"Improve: {_clean_pdf_text(ar.get('improvement', ''), 300)}")
+            _safe_multi_cell(pdf, 0, 5, f"You said: {_clean_pdf_text(ar.get('user_answer_summary', ''), 200)}")
+            _safe_multi_cell(pdf, 0, 5, f"Improve: {_clean_pdf_text(ar.get('improvement', ''), 300)}")
             pdf.ln(4)
     how_to = data.get("how_to_present_better", [])
     if how_to:
@@ -850,15 +866,15 @@ def create_detailed_feedback_pdf(data, role, company):
         pdf.set_font("helvetica", "", 9)
         for h in how_to[:6]:
             if isinstance(h, dict):
-                pdf.multi_cell(0, 5, f"{h.get('tip','')}: {_clean_pdf_text(h.get('do_instead',''), 150)}")
+                _safe_multi_cell(pdf, 0, 5, f"{h.get('tip','')}: {_clean_pdf_text(h.get('do_instead',''), 150)}")
         pdf.ln(4)
     intro = data.get("intro_review")
     if intro and isinstance(intro, dict):
         pdf.set_font("helvetica", "B", 11)
         pdf.cell(0, 8, "Intro - Tell Me About Yourself", 0, new_x="LMARGIN", new_y="NEXT", align="L")
         pdf.set_font("helvetica", "", 9)
-        pdf.multi_cell(0, 5, f"Feedback: {_clean_pdf_text(intro.get('feedback',''), 300)}")
-        pdf.multi_cell(0, 5, f"Suggested intro: {_clean_pdf_text(intro.get('suggested_intro',''), 500)}")
+        _safe_multi_cell(pdf, 0, 5, f"Feedback: {_clean_pdf_text(intro.get('feedback',''), 300)}")
+        _safe_multi_cell(pdf, 0, 5, f"Suggested intro: {_clean_pdf_text(intro.get('suggested_intro',''), 500)}")
         pdf.ln(4)
     bullets = data.get("detailed_analysis_bullets", [])
     if bullets:
@@ -866,7 +882,7 @@ def create_detailed_feedback_pdf(data, role, company):
         pdf.cell(0, 8, "Detailed Analysis", 0, new_x="LMARGIN", new_y="NEXT", align="L")
         pdf.set_font("helvetica", "", 9)
         for b in bullets[:10]:
-            pdf.multi_cell(0, 5, f"- {_clean_pdf_text(b, 400)}")
+            _safe_multi_cell(pdf, 0, 5, f"- {_clean_pdf_text(b, 400)}")
     pdf_dir = os.path.join(tempfile.gettempdir(), "CareerFlow")
     os.makedirs(pdf_dir, exist_ok=True)
     fname = os.path.join(pdf_dir, "CareerFlow_Detailed_Feedback.pdf")
@@ -878,6 +894,7 @@ def create_action_items_pdf(data, role, company):
     """PDF 3: Action items - suggested questions, next steps, intro to practice."""
     pdf = PDF()
     pdf.add_page()
+    pdf.set_auto_page_break(True, 20)
     pdf.set_font("helvetica", "B", 16)
     pdf.set_text_color(10, 25, 60)
     pdf.cell(0, 10, "ACTION ITEMS - FUTURE PREPARATION", 0, new_x="LMARGIN", new_y="NEXT", align="C")
@@ -891,7 +908,7 @@ def create_action_items_pdf(data, role, company):
         pdf.cell(0, 8, "Suggested Questions for Real Interview", 0, new_x="LMARGIN", new_y="NEXT", align="L")
         pdf.set_font("helvetica", "", 9)
         for q in sug_q[:10]:
-            pdf.multi_cell(0, 5, f"- {_clean_pdf_text(q, 300)}")
+            _safe_multi_cell(pdf, 0, 5, f"- {_clean_pdf_text(q, 300)}")
         pdf.ln(4)
     steps = data.get("next_steps", [])
     if steps:
@@ -899,20 +916,20 @@ def create_action_items_pdf(data, role, company):
         pdf.cell(0, 8, "Next Steps", 0, new_x="LMARGIN", new_y="NEXT", align="L")
         pdf.set_font("helvetica", "", 9)
         for s in steps[:8]:
-            pdf.multi_cell(0, 5, f"- {_clean_pdf_text(s, 300)}")
+            _safe_multi_cell(pdf, 0, 5, f"- {_clean_pdf_text(s, 300)}")
         pdf.ln(4)
     intro = data.get("intro_review")
     if intro and isinstance(intro, dict):
         pdf.set_font("helvetica", "B", 11)
         pdf.cell(0, 8, "Intro to Practice (30-60 sec)", 0, new_x="LMARGIN", new_y="NEXT", align="L")
         pdf.set_font("helvetica", "", 9)
-        pdf.multi_cell(0, 5, _clean_pdf_text(intro.get("suggested_intro", ""), 600))
+        _safe_multi_cell(pdf, 0, 5, _clean_pdf_text(intro.get("suggested_intro", ""), 600))
     if data.get("negotiation_tip"):
         pdf.ln(4)
         pdf.set_font("helvetica", "B", 11)
         pdf.cell(0, 8, "Negotiation Tip", 0, new_x="LMARGIN", new_y="NEXT", align="L")
         pdf.set_font("helvetica", "", 9)
-        pdf.multi_cell(0, 5, _clean_pdf_text(data["negotiation_tip"], 300))
+        _safe_multi_cell(pdf, 0, 5, _clean_pdf_text(data["negotiation_tip"], 300))
     pdf_dir = os.path.join(tempfile.gettempdir(), "CareerFlow")
     os.makedirs(pdf_dir, exist_ok=True)
     fname = os.path.join(pdf_dir, "CareerFlow_Action_Items.pdf")
