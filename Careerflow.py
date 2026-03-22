@@ -6,7 +6,7 @@ import speech_recognition as sr
 import json
 import plotly.graph_objects as go
 from dotenv import load_dotenv
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_community.document_loaders import PyPDFLoader
 from streamlit_mic_recorder import mic_recorder
@@ -23,7 +23,7 @@ st.set_page_config(page_title="CareerFlow: Find Your Challenge", layout="centere
 # Base URL for sharing (set CAREERFLOW_BASE_URL in .env when deploying)
 BASE_URL = os.getenv("CAREERFLOW_BASE_URL", "https://careerflow.app")
 
-# The GEMINI_API_KEY check was moved to the sidebar (BYOK)
+# LLM provider is configured in the sidebar (BYOK - any OpenAI-compatible endpoint)
 
 # Spacing for broad, presentable layout
 st.markdown("""
@@ -285,13 +285,16 @@ Requirements:
 # --- 2. CORE FUNCTIONS ---
 
 def get_llm():
-    api_key = st.session_state.get("gemini_api_key", os.getenv("GEMINI_API_KEY"))
-    if not api_key:
-        st.error("Gemini API Key is missing. Please provide it in the sidebar.")
+    api_key = st.session_state.get("llm_api_key", "")
+    base_url = st.session_state.get("llm_base_url", "")
+    model_name = st.session_state.get("llm_model", "")
+    if not api_key or not base_url or not model_name:
+        st.error("LLM not configured. Please set Base URL, Model, and API Key in the sidebar.")
         st.stop()
-    return ChatGoogleGenerativeAI(
-        model="gemini-2.5-flash",
-        google_api_key=api_key,
+    return ChatOpenAI(
+        model=model_name,
+        openai_api_key=api_key,
+        openai_api_base=base_url,
         temperature=0.3,
     )
 
@@ -973,21 +976,74 @@ def init_session_state():
 init_session_state()
 
 # --- 5. SIDEBAR ---
+
+# Provider presets: (label, base_url, models)
+PROVIDER_PRESETS = {
+    "OpenAI": {
+        "base_url": "https://api.openai.com/v1",
+        "models": ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo", "o3-mini"],
+    },
+    "Groq": {
+        "base_url": "https://api.groq.com/openai/v1",
+        "models": ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it", "mixtral-8x7b-32768"],
+    },
+    "Together AI": {
+        "base_url": "https://api.together.xyz/v1",
+        "models": ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "mistralai/Mixtral-8x7B-Instruct-v0.1", "Qwen/Qwen2.5-72B-Instruct-Turbo"],
+    },
+    "Google Gemini (OpenAI)": {
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+        "models": ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
+    },
+    "OpenRouter": {
+        "base_url": "https://openrouter.ai/api/v1",
+        "models": ["google/gemini-2.5-flash", "openai/gpt-4o", "anthropic/claude-3.5-sonnet", "meta-llama/llama-3.3-70b-instruct"],
+    },
+    "Ollama (Local)": {
+        "base_url": "http://localhost:11434/v1",
+        "models": ["llama3.2", "mistral", "gemma2", "phi3", "qwen2.5"],
+    },
+    "Custom": {
+        "base_url": "",
+        "models": [],
+    },
+}
+
 with st.sidebar:
     st.title("CareerFlow")
     st.caption("Professional Edition")
     st.divider()
-    
-    if "gemini_api_key" not in st.session_state:
-        st.session_state.gemini_api_key = os.getenv("GEMINI_API_KEY", "")
-    
-    api_key_input = st.text_input("Gemini API Key (BYOK)", value=st.session_state.gemini_api_key, type="password", help="Enter your Google Gemini API Key")
-    if api_key_input:
-        st.session_state.gemini_api_key = api_key_input
-        
-    if not st.session_state.get("gemini_api_key"):
-        st.warning("Please provide your Gemini API Key to use CareerFlow.")
-        
+
+    st.caption("🔗 LLM Provider")
+    provider_names = list(PROVIDER_PRESETS.keys())
+    selected_provider = st.selectbox("Provider", provider_names, index=3, help="Choose your LLM provider or select Custom")
+    preset = PROVIDER_PRESETS[selected_provider]
+
+    # Base URL
+    if selected_provider == "Custom":
+        base_url_val = st.text_input("Base URL", value="", placeholder="https://your-api.com/v1", help="OpenAI-compatible API endpoint")
+    else:
+        base_url_val = st.text_input("Base URL", value=preset["base_url"], help="OpenAI-compatible API endpoint")
+
+    # Model
+    preset_models = preset["models"]
+    if preset_models:
+        model_val = st.selectbox("Model", preset_models, index=0, help="Select a model or type to search")
+    else:
+        model_val = st.text_input("Model Name", value="", placeholder="e.g., gpt-4o", help="Enter the model name")
+
+    # API Key
+    api_key_val = st.text_input("API Key", value="", type="password", help="Your provider's API key")
+
+    # Store in session state
+    st.session_state.llm_base_url = base_url_val
+    st.session_state.llm_model = model_val
+    if api_key_val:
+        st.session_state.llm_api_key = api_key_val
+
+    if not st.session_state.get("llm_api_key"):
+        st.warning("Please provide your API Key to use CareerFlow.")
+
     st.divider()
     st.caption("Settings")
     role = st.session_state.get("report_role", PREDEFINED_JOBS[0]["role"])
